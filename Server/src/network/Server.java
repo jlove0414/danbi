@@ -14,22 +14,27 @@ import game.*;
 import setting.Setting;
 
 public class Server {
-	
-	private int port;
+	private int mPort;
 	private final Logger logger = Logger.getLogger(Server.class.getName());
 	
     public static void main(String[] args) throws Exception {
-		new Server(Integer.parseInt(args[0])).run();
+		String strPort;
+		if (args.length > 0) {
+			strPort = args[0];
+		} else {
+			strPort = Setting.load().getProperty("Server.port");
+		}
+		new Server(Integer.parseInt(strPort)).run();
     }
 	
 	public Server(int port) {
-		this.port = port;
+		mPort = port;
 		Runtime.getRuntime().addShutdownHook(new Thread() {
 			public void run() {
-				for (User u : User.getAll().values())
-					u.exitGracefully();
-
-				logger.info("서버를 종료합니다.");
+			for (User u : User.getAll().values()) {
+				u.exitGracefully();
+			}
+			logger.info("서버를 종료합니다.");
 			}
 		});
 	}
@@ -37,7 +42,6 @@ public class Server {
 	public void run() throws Exception {
 		EventLoopGroup bossGroup = new NioEventLoopGroup();
 		EventLoopGroup workerGroup = new NioEventLoopGroup();
-		
         try {
             ServerBootstrap bootStrap = new ServerBootstrap()
             	.group(bossGroup, workerGroup)
@@ -46,26 +50,24 @@ public class Server {
             	.option(ChannelOption.SO_BACKLOG, 128)
             	.childOption(ChannelOption.SO_KEEPALIVE, true);
             
-            logger.info("서버를 시작합니다. (" + port + ")");
-            ChannelFuture f = bootStrap.bind(port).sync();
+            logger.info("서버를 시작합니다. (" + mPort + ")");
+            ChannelFuture f = bootStrap.bind(mPort).sync();
             DataBase.connect("jdbc:mysql://" + Setting.load().getProperty("Database.host") + "/" + Setting.load().getProperty("Database.database") + "?characterEncoding=utf8"
 			     , Setting.load().getProperty("Database.username")
 			     , Setting.load().getProperty("Database.password"));
 			GameData.loadSettings();
-            Map.loadMap(2);
+            Map.loadMap();
 
 			while (Handler.isRunning) {
 				Thread.sleep(100);
-
 				for (User user : User.getAll().values()) {
 					user.update();
 				}
-
 				for (Map map : Map.getAll().values()) {
 					map.update();
 				}
 			}
-            
+
             f.channel().closeFuture().sync();
         } finally {
             workerGroup.shutdownGracefully();
@@ -75,5 +77,4 @@ public class Server {
             workerGroup.terminationFuture().sync();
         }
 	}
-	
 }
